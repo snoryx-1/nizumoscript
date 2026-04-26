@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 "use strict";
 
-const { run, check } = require("./runtime/index.js");
-const { sim }        = require("./simulator/index.js");
 const path = require("path");
 
 const args    = process.argv.slice(2);
@@ -26,11 +24,6 @@ const HELP = `
     nizumo check <file.nzs>     Check for errors
     nizumo version              Show version
     nizumo help                 Show this help
-
-  Examples:
-    nizumo mybot.nzs
-    nizumo sim mybot.nzs
-    nizumo check mybot.nzs
 `;
 
 if (!command || command === "help" || command === "--help" || command === "-h") {
@@ -39,27 +32,31 @@ if (!command || command === "help" || command === "--help" || command === "-h") 
 }
 
 if (command === "version" || command === "--version" || command === "-v") {
-  console.log(`NizumoScript v${VERSION}`);
+  console.log("NizumoScript v" + VERSION);
   process.exit(0);
 }
 
 if (command === "check") {
   if (!file) { console.error("[NizumoScript] ❌ Usage: nizumo check <file.nzs>"); process.exit(1); }
+  const { check } = require("./runtime/index.js");
   check(path.resolve(file));
   process.exit(0);
 }
 
 if (command === "sim") {
-  if (!file) { console.error("[NizumoScript] ❌ Usage: nizumo sim <file.nzs>"); }
+  if (!file) { console.error("[NizumoScript] ❌ Usage: nizumo sim <file.nzs>"); process.exit(1); }
+  const { sim } = require("./simulator/index.js");
   sim(path.resolve(file));
-  process.exit(0);
+  // NO process.exit here — sim keeps the process alive via readline
+  return;
 }
 
 // default: nizumo <file.nzs>
 const target = command;
 if (!target.endsWith(".nzs")) {
-  console.error(`[NizumoScript] ❌ Unknown command: "${target}". Usage: nizumo <file.nzs>`);
+  console.error("[NizumoScript] ❌ Unknown command: \"" + target + "\". Usage: nizumo <file.nzs>");
   process.exit(1);
 }
 
+const { run } = require("./runtime/index.js");
 run(path.resolve(target));
