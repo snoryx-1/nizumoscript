@@ -1,5 +1,5 @@
 {
-  "name": "nizumoscript",
+  "name": "nizumo-script",
   "version": "1.0.0",
   "description": "NizumoScript — The Discord Bot Programming Language",
   "main": "src/runtime/index.js",
@@ -16,7 +16,7 @@
     "nizumoscript",
     "discord-bot"
   ],
-  "author": "NizumoScript",
+  "author": "Snoryx-1",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.0.0",
