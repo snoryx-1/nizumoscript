@@ -73,10 +73,9 @@ class Compiler {
     };
     // check args.X
     if (name.startsWith("args.")) {
-  const argName = name.slice(5);
-  const isNum = /^\d+$/.test(argName);
-  return isNum ? `__args[${argName}]` : `__args.${argName}`;
-}
+      const argName = name.slice(5);
+      return `__args.${argName}`;
+    }
     return map[name] ?? name;
   }
 
@@ -411,16 +410,10 @@ ${bodyCode}
     `.trim();
   }
 
-  compileMessageHandler() {
+  compileMessageHandler(extraBody = '') {
     return `
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-  const usedPrefix = PREFIXES.find(p => message.content.startsWith(p));
-  if (!usedPrefix) return;
-  const args   = message.content.slice(usedPrefix.length).trim().split(/ +/);
-  const cmdName = args.shift().toLowerCase();
-  const cmd = client.__commands.get(cmdName) ?? client.__commands.get(client.__aliases.get(cmdName));
-  if (!cmd) return;
   const __ctx = {
     member:  message.member,
     guild:   message.guild,
@@ -429,6 +422,15 @@ client.on("messageCreate", async (message) => {
     reply:   (m) => message.reply(m),
   };
   const __args = {};
+${extraBody ? `  // on message block
+${extraBody}
+` : ''}
+  const usedPrefix = PREFIXES.find(p => message.content.startsWith(p));
+  if (!usedPrefix) return;
+  const args = message.content.slice(usedPrefix.length).trim().split(/ +/);
+  const cmdName = args.shift().toLowerCase();
+  const cmd = client.__commands.get(cmdName) ?? client.__commands.get(client.__aliases.get(cmdName));
+  if (!cmd) return;
   args.forEach((a, i) => { __args[i] = a; });
   try { await cmd.execute(__ctx, __args); }
   catch(err) {
@@ -461,12 +463,21 @@ client.on("messageCreate", async (message) => {
       if (node.type === "CommandDef") this.output.push(this.compileCommand(node));
     }
 
-    // message handler (only if no manual ON message event)
-    if (!hasMessageEvent) this.output.push(this.compileMessageHandler());
+    // message handler — always included, with optional on message body merged in
+    const messageEventNode = nodes.find(n => n.type === "EventDef" && n.eventName.toLowerCase() === "message");
+    let extraMessageBody = '';
+    if (messageEventNode) {
+      this.indent = 2;
+      extraMessageBody = this.stmts(messageEventNode.body);
+      this.indent = 0;
+    }
+    this.output.push(this.compileMessageHandler(extraMessageBody));
 
-    // events
+    // events (skip message — handled in message handler above)
     for (const node of nodes) {
-      if (node.type === "EventDef") this.output.push(this.compileEvent(node));
+      if (node.type === "EventDef" && node.eventName.toLowerCase() !== "message") {
+        this.output.push(this.compileEvent(node));
+      }
     }
 
     // tasks
