@@ -20,6 +20,9 @@ const TokenType = {
   ALIASES: "ALIASES",
   ARGS: "ARGS",
   CATEGORY: "CATEGORY",
+  ERROR: "ERROR",
+  SLASH: "SLASH",
+  PREFIX_CMD: "PREFIX_CMD",
 
   // Actions
   REPLY: "REPLY",
@@ -34,6 +37,11 @@ const TokenType = {
   DELETE_MESSAGE: "DELETE_MESSAGE",
   WAIT: "WAIT",
   LOG: "LOG",
+  BUTTON: "BUTTON",
+  SELECT: "SELECT",
+  OPTION: "OPTION",
+  REACTION: "REACTION",
+  ADD_REACTION: "ADD_REACTION",
 
   // Control flow
   IF: "IF",
@@ -85,7 +93,7 @@ const TokenType = {
   COMMA: "COMMA",
   DOT: "DOT",
   SEMICOLON: "SEMICOLON",
-  SLASH: "SLASH",
+  FSLASH: "FSLASH",
   AT: "AT",
 
   // Operators
@@ -118,75 +126,82 @@ const TokenType = {
 };
 
 const KEYWORDS = {
-  bot:           TokenType.BOT,
-  token:         TokenType.TOKEN,
-  prefix:        TokenType.PREFIX,
-  status:        TokenType.STATUS,
-  intents:       TokenType.INTENTS,
-  command:       TokenType.COMMAND,
-  on:            TokenType.ON,
-  task:          TokenType.TASK,
-  description:   TokenType.DESCRIPTION,
-  access:        TokenType.ACCESS,
-  cooldown:      TokenType.COOLDOWN,
-  aliases:       TokenType.ALIASES,
-  args:          TokenType.ARGS,
-  category:      TokenType.CATEGORY,
-  reply:         TokenType.REPLY,
-  send:          TokenType.SEND,
-  dm:            TokenType.DM,
-  embed:         TokenType.EMBED,
-  ban:           TokenType.BAN,
-  kick:          TokenType.KICK,
-  timeout:       TokenType.TIMEOUT,
-  "give.role":   TokenType.GIVE_ROLE,
-  "remove.role": TokenType.REMOVE_ROLE,
+  bot:              TokenType.BOT,
+  token:            TokenType.TOKEN,
+  prefix:           TokenType.PREFIX,
+  status:           TokenType.STATUS,
+  intents:          TokenType.INTENTS,
+  command:          TokenType.COMMAND,
+  on:               TokenType.ON,
+  task:             TokenType.TASK,
+  description:      TokenType.DESCRIPTION,
+  access:           TokenType.ACCESS,
+  cooldown:         TokenType.COOLDOWN,
+  aliases:          TokenType.ALIASES,
+  args:             TokenType.ARGS,
+  category:         TokenType.CATEGORY,
+  error:            TokenType.ERROR,
+  slash:            TokenType.SLASH,
+  reply:            TokenType.REPLY,
+  send:             TokenType.SEND,
+  dm:               TokenType.DM,
+  embed:            TokenType.EMBED,
+  ban:              TokenType.BAN,
+  kick:             TokenType.KICK,
+  timeout:          TokenType.TIMEOUT,
+  "give.role":      TokenType.GIVE_ROLE,
+  "remove.role":    TokenType.REMOVE_ROLE,
   "delete.message": TokenType.DELETE_MESSAGE,
-  wait:          TokenType.WAIT,
-  log:           TokenType.LOG,
-  if:            TokenType.IF,
-  else:          TokenType.ELSE,
-  elif:          TokenType.ELIF,
-  while:         TokenType.WHILE,
-  for:           TokenType.FOR,
-  each:          TokenType.EACH,
-  in:            TokenType.IN,
-  repeat:        TokenType.REPEAT,
-  times:         TokenType.TIMES,
-  break:         TokenType.BREAK,
-  return:        TokenType.RETURN,
-  var:           TokenType.VAR,
-  set:           TokenType.SET,
-  func:          TokenType.FUNC,
-  title:         TokenType.TITLE,
-  color:         TokenType.COLOR,
-  field:         TokenType.FIELD,
-  footer:        TokenType.FOOTER,
-  image:         TokenType.IMAGE,
-  thumbnail:     TokenType.THUMBNAIL,
-  every:         TokenType.EVERY,
-  import:        TokenType.IMPORT,
-  true:          TokenType.BOOLEAN,
-  false:         TokenType.BOOLEAN,
-  null:          TokenType.NULL,
-  and:           TokenType.AND,
-  or:            TokenType.OR,
-  not:           TokenType.NOT,
-  contains:      TokenType.CONTAINS,
+  wait:             TokenType.WAIT,
+  log:              TokenType.LOG,
+  button:           TokenType.BUTTON,
+  select:           TokenType.SELECT,
+  option:           TokenType.OPTION,
+  reaction:         TokenType.REACTION,
+  "add.reaction":   TokenType.ADD_REACTION,
+  if:               TokenType.IF,
+  else:             TokenType.ELSE,
+  elif:             TokenType.ELIF,
+  while:            TokenType.WHILE,
+  for:              TokenType.FOR,
+  each:             TokenType.EACH,
+  in:               TokenType.IN,
+  repeat:           TokenType.REPEAT,
+  times:            TokenType.TIMES,
+  break:            TokenType.BREAK,
+  return:           TokenType.RETURN,
+  var:              TokenType.VAR,
+  set:              TokenType.SET,
+  func:             TokenType.FUNC,
+  title:            TokenType.TITLE,
+  color:            TokenType.COLOR,
+  field:            TokenType.FIELD,
+  footer:           TokenType.FOOTER,
+  image:            TokenType.IMAGE,
+  thumbnail:        TokenType.THUMBNAIL,
+  every:            TokenType.EVERY,
+  import:           TokenType.IMPORT,
+  true:             TokenType.BOOLEAN,
+  false:            TokenType.BOOLEAN,
+  null:             TokenType.NULL,
+  and:              TokenType.AND,
+  or:               TokenType.OR,
+  not:              TokenType.NOT,
+  contains:         TokenType.CONTAINS,
 };
 
 class Lexer {
   constructor(source) {
     this.source = source;
-    this.pos = 0;
-    this.line = 1;
-    this.col = 1;
+    this.pos    = 0;
+    this.line   = 1;
+    this.col    = 1;
     this.tokens = [];
   }
 
-  current()            { return this.source[this.pos]; }
-  peek(offset = 1)     { return this.source[this.pos + offset]; }
-  isEnd()              { return this.pos >= this.source.length; }
+  current()        { return this.source[this.pos]; }
+  peek(offset = 1) { return this.source[this.pos + offset]; }
+  isEnd()          { return this.pos >= this.source.length; }
 
   advance() {
     const ch = this.source[this.pos++];
@@ -208,7 +223,7 @@ class Lexer {
   }
 
   readString(quote) {
-    this.advance(); // skip opening quote
+    this.advance();
     let str = "";
     while (!this.isEnd() && this.current() !== quote) {
       if (this.current() === "\\") {
@@ -220,14 +235,13 @@ class Lexer {
         str += this.advance();
       }
     }
-    this.advance(); // skip closing quote
+    this.advance();
     this.addToken(TokenType.STRING, str);
   }
 
   readNumber() {
     let num = "";
     while (!this.isEnd() && /[0-9.]/.test(this.current())) num += this.advance();
-    // duration suffix: 5s, 10m, 2h, 7d
     if (!this.isEnd() && /[smhd]/.test(this.current())) {
       num += this.advance();
       this.addToken(TokenType.DURATION, num);
@@ -240,19 +254,14 @@ class Lexer {
     let id = "";
     while (!this.isEnd() && /[a-zA-Z0-9_]/.test(this.current())) id += this.advance();
 
-    // check for compound keywords like give.role
+    // check compound keywords like give.role
     if (!this.isEnd() && this.current() === ".") {
-      const saved = id + ".";
       const savedPos = this.pos;
       this.advance();
       let rest = "";
       while (!this.isEnd() && /[a-zA-Z0-9_]/.test(this.current())) rest += this.advance();
-      const compound = saved + rest;
-      if (KEYWORDS[compound]) {
-        this.addToken(KEYWORDS[compound], compound);
-        return;
-      }
-      // not a compound keyword — backtrack
+      const compound = id + "." + rest;
+      if (KEYWORDS[compound]) { this.addToken(KEYWORDS[compound], compound); return; }
       this.pos = savedPos;
     }
 
@@ -264,64 +273,47 @@ class Lexer {
     while (!this.isEnd()) {
       this.skipWhitespace();
       if (this.isEnd()) break;
-
       const ch = this.current();
 
-      // Comments
       if (ch === "/" && this.peek() === "/") { this.skipComment(); continue; }
-      if (ch === "#") { this.skipComment(); continue; }
-
-      // Newlines
-      if (ch === "\n") {
-        this.advance();
-        this.addToken(TokenType.NEWLINE, "\n");
-        continue;
-      }
-
-      // Strings
+      if (ch === "#")                        { this.skipComment(); continue; }
+      if (ch === "\n") { this.advance(); this.addToken(TokenType.NEWLINE, "\n"); continue; }
       if (ch === '"' || ch === "'") { this.readString(ch); continue; }
+      if (/[0-9]/.test(ch))        { this.readNumber();   continue; }
+      if (/[a-zA-Z_]/.test(ch))    { this.readIdentifier(); continue; }
 
-      // Numbers
-      if (/[0-9]/.test(ch)) { this.readNumber(); continue; }
-
-      // Identifiers & keywords
-      if (/[a-zA-Z_]/.test(ch)) { this.readIdentifier(); continue; }
-
-      // Multi-char operators
-      if (ch === "+" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.PLUS_EQ, "+="); continue; }
+      if (ch === "+" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.PLUS_EQ,  "+="); continue; }
       if (ch === "-" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.MINUS_EQ, "-="); continue; }
-      if (ch === "*" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.STAR_EQ, "*="); continue; }
+      if (ch === "*" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.STAR_EQ,  "*="); continue; }
       if (ch === "/" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.SLASH_EQ, "/="); continue; }
-      if (ch === "=" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.EQ_EQ, "=="); continue; }
-      if (ch === "!" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.NEQ, "!="); continue; }
-      if (ch === ">" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.GTE, ">="); continue; }
-      if (ch === "<" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.LTE, "<="); continue; }
+      if (ch === "=" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.EQ_EQ,    "=="); continue; }
+      if (ch === "!" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.NEQ,      "!="); continue; }
+      if (ch === ">" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.GTE,      ">="); continue; }
+      if (ch === "<" && this.peek() === "=") { this.advance(); this.advance(); this.addToken(TokenType.LTE,      "<="); continue; }
 
-      // Single char
       switch (ch) {
-        case "{": this.advance(); this.addToken(TokenType.LBRACE, "{"); break;
-        case "}": this.advance(); this.addToken(TokenType.RBRACE, "}"); break;
-        case "(": this.advance(); this.addToken(TokenType.LPAREN, "("); break;
-        case ")": this.advance(); this.addToken(TokenType.RPAREN, ")"); break;
-        case "[": this.advance(); this.addToken(TokenType.LBRACKET, "["); break;
-        case "]": this.advance(); this.addToken(TokenType.RBRACKET, "]"); break;
-        case ":": this.advance(); this.addToken(TokenType.COLON, ":"); break;
-        case ",": this.advance(); this.addToken(TokenType.COMMA, ","); break;
-        case ".": this.advance(); this.addToken(TokenType.DOT, "."); break;
+        case "{": this.advance(); this.addToken(TokenType.LBRACE,    "{"); break;
+        case "}": this.advance(); this.addToken(TokenType.RBRACE,    "}"); break;
+        case "(": this.advance(); this.addToken(TokenType.LPAREN,    "("); break;
+        case ")": this.advance(); this.addToken(TokenType.RPAREN,    ")"); break;
+        case "[": this.advance(); this.addToken(TokenType.LBRACKET,  "["); break;
+        case "]": this.advance(); this.addToken(TokenType.RBRACKET,  "]"); break;
+        case ":": this.advance(); this.addToken(TokenType.COLON,     ":"); break;
+        case ",": this.advance(); this.addToken(TokenType.COMMA,     ","); break;
+        case ".": this.advance(); this.addToken(TokenType.DOT,       "."); break;
         case ";": this.advance(); this.addToken(TokenType.SEMICOLON, ";"); break;
-        case "/": this.advance(); this.addToken(TokenType.SLASH, "/"); break;
-        case "@": this.advance(); this.addToken(TokenType.AT, "@"); break;
-        case "=": this.advance(); this.addToken(TokenType.EQUALS, "="); break;
-        case "+": this.advance(); this.addToken(TokenType.PLUS, "+"); break;
-        case "-": this.advance(); this.addToken(TokenType.MINUS, "-"); break;
-        case "*": this.advance(); this.addToken(TokenType.STAR, "*"); break;
-        case "%": this.advance(); this.addToken(TokenType.PERCENT, "%"); break;
-        case ">": this.advance(); this.addToken(TokenType.GT, ">"); break;
-        case "<": this.advance(); this.addToken(TokenType.LT, "<"); break;
-        default:  this.advance(); break; // skip unknown
+        case "/": this.advance(); this.addToken(TokenType.FSLASH,    "/"); break;
+        case "@": this.advance(); this.addToken(TokenType.AT,        "@"); break;
+        case "=": this.advance(); this.addToken(TokenType.EQUALS,    "="); break;
+        case "+": this.advance(); this.addToken(TokenType.PLUS,      "+"); break;
+        case "-": this.advance(); this.addToken(TokenType.MINUS,     "-"); break;
+        case "*": this.advance(); this.addToken(TokenType.STAR,      "*"); break;
+        case "%": this.advance(); this.addToken(TokenType.PERCENT,   "%"); break;
+        case ">": this.advance(); this.addToken(TokenType.GT,        ">"); break;
+        case "<": this.advance(); this.addToken(TokenType.LT,        "<"); break;
+        default:  this.advance(); break;
       }
     }
-
     this.addToken(TokenType.EOF, null);
     return this.tokens;
   }
