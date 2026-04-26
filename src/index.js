@@ -50,7 +50,7 @@ if (command === "check") {
 }
 
 if (command === "sim") {
-  if (!file) { console.error("[NizumoScript] ❌ Usage: nizumo sim <file.nzs>"); process.exit(1); }
+  if (!file) { console.error("[NizumoScript] ❌ Usage: nizumo sim <file.nzs>"); }
   sim(path.resolve(file));
   process.exit(0);
 }
