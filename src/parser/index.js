@@ -206,6 +206,9 @@ class Parser {
     if (tok.type === TokenType.DELETE_MESSAGE) return this.parseDeleteMsg();
     if (tok.type === TokenType.WAIT)           return this.parseWait();
     if (tok.type === TokenType.LOG)            return this.parseLog();
+    if (tok.type === TokenType.BUTTON)         return this.parseButton();
+    if (tok.type === TokenType.SELECT)         return this.parseSelect();
+    if (tok.type === TokenType.ADD_REACTION)   return this.parseAddReaction();
     if (tok.type === TokenType.IF)             return this.parseIf();
     if (tok.type === TokenType.WHILE)          return this.parseWhile();
     if (tok.type === TokenType.FOR)            return this.parseFor();
@@ -332,6 +335,40 @@ class Parser {
     return { type: "Log", value };
   }
 
+  parseButton() {
+    this.expect(TokenType.BUTTON);
+    const label = this.parseExpr();
+    const style = this.check(TokenType.IDENTIFIER) ? this.advance().value : "primary";
+    const body  = this.parseBlock();
+    return { type: "Button", label, style, body };
+  }
+
+  parseSelect() {
+    this.expect(TokenType.SELECT);
+    const placeholder = this.parseExpr();
+    this.expect(TokenType.LBRACE);
+    const options = [];
+    while (!this.check(TokenType.RBRACE) && !this.isEnd()) {
+      if (this.current().type === TokenType.OPTION) {
+        this.advance();
+        const label = this.parseExpr();
+        const value = this.check(TokenType.STRING) ? this.parseExpr() : label;
+        const body  = this.parseBlock();
+        options.push({ label, value, body });
+      } else { this.advance(); }
+    }
+    this.expect(TokenType.RBRACE);
+    return { type: "Select", placeholder, options };
+  }
+
+  parseAddReaction() {
+    this.expect(TokenType.ADD_REACTION);
+    const emoji = this.parseExpr();
+    let body = null;
+    if (this.check(TokenType.LBRACE)) body = this.parseBlock();
+    return { type: "AddReaction", emoji, body };
+  }
+
   parseIf() {
     this.expect(TokenType.IF);
     const condition = this.parseExpr();
@@ -428,7 +465,28 @@ class Parser {
     while (!this.check(TokenType.RBRACE) && !this.isEnd()) {
       const key = this.current();
       if (key.type === TokenType.TOKEN)   { this.advance(); props.token   = this.parseExpr(); }
-      else if (key.type === TokenType.PREFIX)  { this.advance(); props.prefix  = this.parseExpr(); }
+      else if (key.type === TokenType.PREFIX)  {
+        this.advance();
+        // prefix can be a single string or array or block with global/fallback/mention
+        if (this.check(TokenType.LBRACE)) {
+          this.advance();
+          props.prefix = { type: "prefix_config", global: null, fallback: null, mention: false, caseSensitive: false };
+          while (!this.check(TokenType.RBRACE) && !this.isEnd()) {
+            const pk = this.current().value;
+            this.advance();
+            if (pk === "global")        { props.prefix.global        = this.parseExpr(); }
+            else if (pk === "fallback") { props.prefix.fallback       = this.parseExpr(); }
+            else if (pk === "mention")  { props.prefix.mention        = this.parseExpr(); }
+            else if (pk === "caseSensitive") { props.prefix.caseSensitive = this.parseExpr(); }
+            else { this.parseExpr(); }
+          }
+          this.expect(TokenType.RBRACE);
+        } else if (this.check(TokenType.LBRACKET)) {
+          props.prefix = this.parseArray();
+        } else {
+          props.prefix = this.parseExpr();
+        }
+      }
       else if (key.type === TokenType.STATUS)  { this.advance(); props.status  = this.parseExpr(); }
       else if (key.type === TokenType.INTENTS) { this.advance(); props.intents = this.parseArray(); }
       else { this.advance(); } // skip unknown
@@ -452,11 +510,15 @@ class Parser {
     while (!this.check(TokenType.RBRACE) && !this.isEnd()) {
       const tok = this.current();
       if (tok.type === TokenType.DESCRIPTION) { this.advance(); props.description = this.parseExpr(); }
-      else if (tok.type === TokenType.ACCESS)      { this.advance(); props.access = this.parseExpr(); }
-      else if (tok.type === TokenType.COOLDOWN)    { this.advance(); props.cooldown = this.parseExpr(); }
-      else if (tok.type === TokenType.ALIASES)     { this.advance(); props.aliases = this.parseArray(); }
-      else if (tok.type === TokenType.ARGS)        { this.advance(); props.args = this.parseArray(); }
-      else if (tok.type === TokenType.CATEGORY)    { this.advance(); props.category = this.parseExpr(); }
+      else if (tok.type === TokenType.ACCESS)      { this.advance(); props.access      = this.parseExpr(); }
+      else if (tok.type === TokenType.COOLDOWN)    { this.advance(); props.cooldown    = this.parseExpr(); }
+      else if (tok.type === TokenType.ALIASES)     { this.advance(); props.aliases     = this.parseArray(); }
+      else if (tok.type === TokenType.ARGS)        { this.advance(); props.args        = this.parseArray(); }
+      else if (tok.type === TokenType.CATEGORY)    { this.advance(); props.category    = this.parseExpr(); }
+      else if (tok.type === TokenType.ERROR)       { this.advance(); props.error       = this.parseExpr(); }
+      else if (tok.type === TokenType.SLASH)       { this.advance(); props.slash       = true; }
+      else if (tok.type === TokenType.PREFIX)      { this.advance(); props.prefix      = this.check(TokenType.LBRACKET) ? this.parseArray() : this.parseExpr(); }
+      else if (tok.type === TokenType.REACTION)    { this.advance(); props.reaction    = this.parseExpr(); const rb = this.parseBlock(); body.push({ type: "ReactionHandler", emoji: props.reaction, body: rb }); }
       else { body.push(this.parseStatement()); }
     }
     this.expect(TokenType.RBRACE);
