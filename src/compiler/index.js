@@ -73,9 +73,10 @@ class Compiler {
     };
     // check args.X
     if (name.startsWith("args.")) {
-      const argName = name.slice(5);
-      return `__args.${argName}`;
-    }
+  const argName = name.slice(5);
+  const isNum = /^\d+$/.test(argName);
+  return isNum ? `__args[${argName}]` : `__args.${argName}`;
+}
     return map[name] ?? name;
   }
 
