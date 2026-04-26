@@ -47,9 +47,9 @@ command userinfo {
 // ── Slash command ─────────────────────────────
 
 command slashping {
-  description "Slash command ping"
   slash
   access everyone
+  description "Slash command ping"
 
   reply "🏓 Slash Pong!"
 }
