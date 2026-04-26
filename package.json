@@ -1,6 +1,6 @@
 {
   "name": "nizumo-script",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "NizumoScript — The Discord Bot Programming Language",
   "main": "src/runtime/index.js",
   "bin": {
