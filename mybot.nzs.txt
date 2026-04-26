@@ -1,0 +1,167 @@
+// ─────────────────────────────────────────────
+//  NizumoScript Example Bot
+//  Showcasing all features
+// ─────────────────────────────────────────────
+
+bot "MyBot" {
+  token "process.env.TOKEN"
+  prefix {
+    global "!"
+    fallback "."
+    mention true
+  }
+  status "Made with NizumoScript ⚡"
+}
+
+// ── Basic commands ────────────────────────────
+
+command ping {
+  description "Check if the bot is alive"
+  access everyone
+  cooldown 3s
+  error "❌ Ping command failed, try again!"
+
+  reply "🏓 Pong! Bot is online!"
+}
+
+command say {
+  description "Make the bot say something"
+  access everyone
+
+  reply "📢 {args.0}"
+}
+
+command userinfo {
+  description "Get info about yourself"
+  access everyone
+
+  embed {
+    title "👤 User Info"
+    field "Name" "{member.name}"
+    field "ID" "{member.id}"
+    color "#5865F2"
+    footer "NizumoScript Bot"
+  }
+}
+
+// ── Slash command ─────────────────────────────
+
+command slashping {
+  description "Slash command ping"
+  slash
+  access everyone
+
+  reply "🏓 Slash Pong!"
+}
+
+// ── Per-command prefix ────────────────────────
+
+command modkick {
+  description "Kick a member"
+  access moderator
+  prefix ["!", "/", "."]
+  error "❌ You need moderator permissions!"
+
+  kick member
+  reply "👢 Member was kicked."
+}
+
+// ── Buttons ───────────────────────────────────
+
+command menu {
+  description "Show a menu with buttons"
+  access everyone
+
+  reply "🎮 Choose an option:"
+
+  button "✅ Accept" success {
+    reply "You accepted!"
+  }
+
+  button "❌ Decline" danger {
+    reply "You declined!"
+  }
+}
+
+// ── Select menu ───────────────────────────────
+
+command pickcolor {
+  description "Pick a color"
+  access everyone
+
+  reply "🎨 Pick your favorite color:"
+
+  select "Choose a color..." {
+    option "🔴 Red" "red" {
+      reply "You picked Red! 🔴"
+    }
+    option "🔵 Blue" "blue" {
+      reply "You picked Blue! 🔵"
+    }
+    option "🟢 Green" "green" {
+      reply "You picked Green! 🟢"
+    }
+  }
+}
+
+// ── Reaction roles ────────────────────────────
+
+command roles {
+  description "React to get a role"
+  access everyone
+
+  reply "React with ⭐ to get the Star role!"
+
+  reaction "⭐" {
+    give.role member "Star"
+    dm member "✅ You got the Star role!"
+  }
+}
+
+// ── Economy ───────────────────────────────────
+
+command balance {
+  description "Check your coin balance"
+  access everyone
+  aliases ["bal", "coins"]
+  cooldown 5s
+
+  var coins = Storage.getUser(member.id, "coins", 0)
+  reply "💰 You have {coins} coins!"
+}
+
+command daily {
+  description "Claim your daily coins"
+  access everyone
+  cooldown 24h
+  error "⏳ You already claimed your daily!"
+
+  var current = Storage.getUser(member.id, "coins", 0)
+  var reward = random(50, 150)
+  var newBal = current + reward
+  Storage.setUser(member.id, "coins", newBal)
+  reply "✅ You claimed {reward} coins! Balance: {newBal} 🪙"
+}
+
+// ── Events ────────────────────────────────────
+
+on memberjoin {
+  send channel "general" "👋 Welcome {member.name} to the server!"
+}
+
+on memberleave {
+  send channel "general" "😢 {member.name} has left the server."
+}
+
+on message {
+  if message contains "hello bot" {
+    reply "Hey {member.name}! 👋"
+  }
+}
+
+// ── Scheduled task ────────────────────────────
+
+task cleanup {
+  every 24h
+  log "Running daily cleanup..."
+}
