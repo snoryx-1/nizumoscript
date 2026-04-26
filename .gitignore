@@ -1,0 +1,6 @@
+node_modules/
+.env
+.nizumo_out.js
+.nizumo_data/
+__storage.js
+*.log

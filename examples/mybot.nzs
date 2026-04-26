@@ -1,0 +1,98 @@
+// ─────────────────────────────────────────────
+//  My First NizumoScript Bot
+//  Run: nizumo mybot.nzs
+// ─────────────────────────────────────────────
+
+bot "MyBot" {
+  token "env.TOKEN"
+  prefix "!"
+  status "Made with NizumoScript ⚡"
+}
+
+// Simple ping command
+command ping {
+  description "Check if the bot is alive"
+  access everyone
+  cooldown 3s
+
+  reply "🏓 Pong! Bot is online!"
+}
+
+// Say command
+command say {
+  description "Make the bot say something"
+  access everyone
+
+  reply "📢 {args.0}"
+}
+
+// User info command
+command userinfo {
+  description "Get info about yourself"
+  access everyone
+
+  embed {
+    title "👤 User Info"
+    field "Name" "{member.name}"
+    field "ID" "{member.id}"
+    color "#5865F2"
+    footer "NizumoScript Bot"
+  }
+}
+
+// Basic economy - balance
+command balance {
+  description "Check your coin balance"
+  access everyone
+  aliases ["bal", "coins"]
+  cooldown 5s
+
+  var coins = Storage.getUser(member.id, "coins", 0)
+  reply "💰 You have {coins} coins, {member.name}!"
+}
+
+// Basic economy - daily
+command daily {
+  description "Claim your daily coins"
+  access everyone
+  cooldown 24h
+
+  var current = Storage.getUser(member.id, "coins", 0)
+  var reward = random(50, 150)
+  var newBal = current + reward
+  Storage.setUser(member.id, "coins", newBal)
+  reply "✅ You claimed {reward} daily coins! Balance: {newBal} 🪙"
+}
+
+// Moderation - kick
+command kickuser {
+  description "Kick a member"
+  access moderator
+
+  kick member
+  reply "👢 {member.name} was kicked."
+}
+
+// Welcome new members
+on memberjoin {
+  send channel "general" "👋 Welcome {member.name} to the server!"
+}
+
+// Goodbye message
+on memberleave {
+  send channel "general" "😢 {member.name} has left the server."
+}
+
+// Auto-respond to messages
+on message {
+  if message contains "hello bot" {
+    reply "Hey {member.name}! 👋"
+  }
+}
+
+// Scheduled cleanup task
+task cleanup {
+  every 24h
+
+  log "Running daily cleanup..."
+}

@@ -1,0 +1,28 @@
+{
+  "name": "nizumoscript",
+  "version": "1.0.0",
+  "description": "NizumoScript — The Discord Bot Programming Language",
+  "main": "src/runtime/index.js",
+  "bin": {
+    "nizumo": "src/index.js"
+  },
+  "scripts": {
+    "test": "node src/index.js check examples/mybot.nzs"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "language",
+    "nizumoscript",
+    "discord-bot"
+  ],
+  "author": "NizumoScript",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
