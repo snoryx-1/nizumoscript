@@ -1,6 +1,6 @@
 {
-  "name": "nizumo-script",
-  "version": "1.0.1",
+  "name": "nizumoscript-test",
+  "version": "0.0.1",
   "description": "NizumoScript — The Discord Bot Programming Language",
   "main": "src/runtime/index.js",
   "bin": {
@@ -14,7 +14,8 @@
     "bot",
     "language",
     "nizumoscript",
-    "discord-bot"
+    "discord-bot" ,
+    "Nizumo"
   ],
   "author": "Snoryx-1",
   "license": "MIT",
