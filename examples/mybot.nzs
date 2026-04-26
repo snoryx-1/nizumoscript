@@ -83,12 +83,6 @@ on memberleave {
   send channel "general" "😢 {member.name} has left the server."
 }
 
-// Auto-respond to messages
-on message {
-  if message contains "hello bot" {
-    reply "Hey {member.name}! 👋"
-  }
-}
 
 // Scheduled cleanup task
 task cleanup {
