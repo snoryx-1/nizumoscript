@@ -1,167 +1,135 @@
-// ─────────────────────────────────────────────
-//  NizumoScript Example Bot
-//  Showcasing all features
-// ─────────────────────────────────────────────
-
-bot "MyBot" {
+bot "EcoBot" {
   token "process.env.TOKEN"
-  prefix {
-    global "!"
-    fallback "."
-    mention true
-  }
-  status "Made with NizumoScript ⚡"
+  prefix "!"
+  status "💰 Economy Bot"
+  help.auto
 }
-
-// ── Basic commands ────────────────────────────
-
-command ping {
-  description "Check if the bot is alive"
-  access everyone
-  cooldown 3s
-  error "❌ Ping command failed, try again!"
-
-  reply "🏓 Pong! Bot is online!"
-}
-
-command say {
-  description "Make the bot say something"
-  access everyone
-
-  reply "📢 {args.0}"
-}
-
-command userinfo {
-  description "Get info about yourself"
-  access everyone
-
-  embed {
-    title "👤 User Info"
-    field "Name" "{member.name}"
-    field "ID" "{member.id}"
-    color "#5865F2"
-    footer "NizumoScript Bot"
-  }
-}
-
-// ── Slash command ─────────────────────────────
-
-command slashping {
-  slash
-  access everyone
-  description "Slash command ping"
-
-  reply "🏓 Slash Pong!"
-}
-
-// ── Per-command prefix ────────────────────────
-
-command modkick {
-  description "Kick a member"
-  access moderator
-  prefix ["!", "/", "."]
-  error "❌ You need moderator permissions!"
-
-  kick member
-  reply "👢 Member was kicked."
-}
-
-// ── Buttons ───────────────────────────────────
-
-command menu {
-  description "Show a menu with buttons"
-  access everyone
-
-  reply "🎮 Choose an option:"
-
-  button "✅ Accept" success {
-    reply "You accepted!"
-  }
-
-  button "❌ Decline" danger {
-    reply "You declined!"
-  }
-}
-
-// ── Select menu ───────────────────────────────
-
-command pickcolor {
-  description "Pick a color"
-  access everyone
-
-  reply "🎨 Pick your favorite color:"
-
-  select "Choose a color..." {
-    option "🔴 Red" "red" {
-      reply "You picked Red! 🔴"
-    }
-    option "🔵 Blue" "blue" {
-      reply "You picked Blue! 🔵"
-    }
-    option "🟢 Green" "green" {
-      reply "You picked Green! 🟢"
-    }
-  }
-}
-
-// ── Reaction roles ────────────────────────────
-
-command roles {
-  description "React to get a role"
-  access everyone
-
-  reply "React with ⭐ to get the Star role!"
-
-  reaction "⭐" {
-    give.role member "Star"
-    dm member "✅ You got the Star role!"
-  }
-}
-
-// ── Economy ───────────────────────────────────
 
 command balance {
   description "Check your coin balance"
   access everyone
   aliases ["bal", "coins"]
-  cooldown 5s
+  cooldown 3s
 
   var coins = Storage.getUser(member.id, "coins", 0)
-  reply "💰 You have {coins} coins!"
-}
+  var bank = Storage.getUser(member.id, "bank", 0)
 
-command daily {
-  description "Claim your daily coins"
-  access everyone
-  cooldown 24h
-  error "⏳ You already claimed your daily!"
-
-  var current = Storage.getUser(member.id, "coins", 0)
-  var reward = random(50, 150)
-  var newBal = current + reward
-  Storage.setUser(member.id, "coins", newBal)
-  reply "✅ You claimed {reward} coins! Balance: {newBal} 🪙"
-}
-
-// ── Events ────────────────────────────────────
-
-on memberjoin {
-  send channel "general" "👋 Welcome {member.name} to the server!"
-}
-
-on memberleave {
-  send channel "general" "😢 {member.name} has left the server."
-}
-
-on message {
-  if message contains "hello bot" {
-    reply "Hey {member.name}! 👋"
+  embed {
+    title "💰 {member.name}'s Balance"
+    field "Wallet" "{coins} 🪙"
+    field "Bank" "{bank} 🏦"
+    color "#F1C40F"
+    footer "EcoBot"
   }
 }
 
-// ── Scheduled task ────────────────────────────
+command daily {
+  description "Claim your daily reward"
+  access everyone
+  cooldown 24h
+  error "⏳ Already claimed today!"
 
-task cleanup {
-  every 24h
-  log "Running daily cleanup..."
+  var current = Storage.getUser(member.id, "coins", 0)
+  var reward = random(100, 300)
+  var newBal = current + reward
+  Storage.setUser(member.id, "coins", newBal)
+  reply "✅ You claimed {reward} 🪙 daily coins! Balance: {newBal}"
+}
+
+command work {
+  description "Work to earn coins"
+  access everyone
+  cooldown 1h
+
+  var current = Storage.getUser(member.id, "coins", 0)
+  var earned = random(50, 150)
+  var newBal = current + earned
+  Storage.setUser(member.id, "coins", newBal)
+  reply "💼 You worked hard and earned {earned} 🪙! Balance: {newBal}"
+}
+
+command pay {
+  description "Send coins to someone"
+  access everyone
+  cooldown 10s
+  args [target: Member, amount: Number]
+
+  var myBal = Storage.getUser(member.id, "coins", 0)
+
+  if myBal < args.amount {
+    reply "❌ You don't have enough coins!"
+  }
+
+  var theirBal = Storage.getUser(args.target, "coins", 0)
+  Storage.setUser(member.id, "coins", myBal - args.amount)
+  Storage.setUser(args.target, "coins", theirBal + args.amount)
+  reply "✅ Sent {args.amount} 🪙 successfully!"
+}
+
+command deposit {
+  description "Deposit coins into your bank"
+  access everyone
+  aliases ["dep"]
+  args [amount: Number]
+
+  var wallet = Storage.getUser(member.id, "coins", 0)
+  var bank = Storage.getUser(member.id, "bank", 0)
+
+  if wallet < args.amount {
+    reply "❌ You don't have that many coins in your wallet!"
+  }
+
+  Storage.setUser(member.id, "coins", wallet - args.amount)
+  Storage.setUser(member.id, "bank", bank + args.amount)
+  reply "🏦 Deposited {args.amount} 🪙 into your bank!"
+}
+
+command withdraw {
+  description "Withdraw coins from your bank"
+  access everyone
+  aliases ["with"]
+  args [amount: Number]
+
+  var bank = Storage.getUser(member.id, "bank", 0)
+  var wallet = Storage.getUser(member.id, "coins", 0)
+
+  if bank < args.amount {
+    reply "❌ You don't have that many coins in your bank!"
+  }
+
+  Storage.setUser(member.id, "bank", bank - args.amount)
+  Storage.setUser(member.id, "coins", wallet + args.amount)
+  reply "💸 Withdrew {args.amount} 🪙 from your bank!"
+}
+
+command rob {
+  description "Try to rob someone"
+  access everyone
+  cooldown 30m
+  args [target: Member]
+
+  var myBal = Storage.getUser(member.id, "coins", 0)
+  var theirBal = Storage.getUser(args.target, "coins", 0)
+
+  if theirBal < 50 {
+    reply "❌ That person is too broke to rob!"
+  }
+
+  var success = random(1, 2)
+
+  if success == 1 {
+    var stolen = random(10, 100)
+    Storage.setUser(args.target, "coins", theirBal - stolen)
+    Storage.setUser(member.id, "coins", myBal + stolen)
+    reply "🦹 You successfully stole {stolen} 🪙!"
+  } else {
+    var fine = random(10, 50)
+    Storage.setUser(member.id, "coins", myBal - fine)
+    reply "👮 You got caught and paid a {fine} 🪙 fine!"
+  }
+}
+
+on memberjoin {
+  Storage.setUser(member.id, "coins", 100)
+  send channel "general" "👋 Welcome {member.name}! You've been given 100 🪙 starter coins!"
 }
