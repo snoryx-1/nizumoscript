@@ -777,6 +777,13 @@ class Compiler {
 
     this.output.push(this.compileBot(botNode ?? { type:"BotDef", name:"NizumoBot", props:{} }));
 
+    // Global variables — declared at top level, accessible everywhere
+    const globalVars = nodes.filter(n => n.type === "VarDecl");
+    if (globalVars.length > 0) {
+      const globalLines = globalVars.map(v => "const " + v.name + " = " + this.expr(v.value) + ";");
+      this.output.push("// Global variables\n" + globalLines.join("\n"));
+    }
+
     for (const node of nodes) {
       if (node.type === "FuncDecl") {
         const lines = [];
