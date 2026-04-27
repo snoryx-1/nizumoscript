@@ -84,6 +84,7 @@ function extractNodes(ast) {
   const commands = {};
   const events   = {};
   const bot      = {};
+  const globals  = {};
 
   for (const node of ast.body) {
     if (node.type === "BotDef") {
@@ -92,8 +93,9 @@ function extractNodes(ast) {
     }
     if (node.type === "CommandDef") commands[node.name.toLowerCase()] = node;
     if (node.type === "EventDef")   events[node.eventName.toLowerCase()] = node;
+    if (node.type === "VarDecl")    globals[node.name] = node.value;
   }
-  return { commands, events, bot };
+  return { commands, events, bot, globals };
 }
 
 // ─── Sim expression evaluator ────────────────────────────────────────────────
@@ -431,7 +433,7 @@ async function sim(filePath) {
     process.exit(1);
   }
 
-  const { commands, events, bot } = extractNodes(ast);
+  const { commands, events, bot, globals } = extractNodes(ast);
   const storage   = new SimStorage();
   const prefixes  = getPrefix(bot);
   let   currentUser = { ...USERS.user };
@@ -465,8 +467,12 @@ async function sim(filePath) {
   // ── REPL ────────────────────────────────────────────────────────────────────
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-  // Persistent vars across sim session
+  // Persistent vars across sim session — pre-populated with global vars
   const simVars = {};
+  for (const [name, valNode] of Object.entries(globals)) {
+    const ctx = { member: null, guild: null, message: null, args: {}, vars: {}, storage, output: [] };
+    try { simVars[name] = await evalExpr(valNode, ctx); } catch(e) { simVars[name] = null; }
+  }
 
   const prompt = () => {
     rl.question(color("  > ", c.green, c.bold), async (input) => {
