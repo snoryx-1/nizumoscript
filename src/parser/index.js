@@ -534,6 +534,7 @@ class Parser {
       if (tok.type === TokenType.ON)      { program.body.push(this.parseEvent());   continue; }
       if (tok.type === TokenType.TASK)    { program.body.push(this.parseTask());    continue; }
       if (tok.type === TokenType.FUNC)    { program.body.push(this.parseFunc());    continue; }
+      if (tok.type === TokenType.VAR)     { program.body.push(this.parseVar());     continue; }
       if (tok.type === TokenType.IMPORT)  { this.advance(); this.advance(); continue; }
       throw new Error("[NizumoScript] Line " + tok.line + ": Unexpected top-level token \"" + tok.value + "\"");
     }
