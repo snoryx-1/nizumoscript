@@ -24,29 +24,29 @@ class Compiler {
     return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
   }
 
-  compilePrefixes(prefixProp) {
-    if (!prefixProp) return '["!", "/"]';
-    if (prefixProp.type === "prefix_config") {
+  compilePrefixes(p) {
+    if (!p) return '["!", "/"]';
+    if (p.type === "prefix_config") {
       const parts = [];
-      if (prefixProp.global)   parts.push(this.expr(prefixProp.global));
-      if (prefixProp.fallback) parts.push(this.expr(prefixProp.fallback));
+      if (p.global)   parts.push(this.expr(p.global));
+      if (p.fallback) parts.push(this.expr(p.fallback));
       if (!parts.length) parts.push('"!"');
       if (!parts.includes('"/"')) parts.push('"/"');
       return "[" + parts.join(", ") + "]";
     }
-    if (prefixProp.type === "array") {
-      const items = prefixProp.value.map(v => this.expr(v));
+    if (p.type === "array") {
+      const items = p.value.map(v => this.expr(v));
       if (!items.includes('"/"')) items.push('"/"');
       return "[" + items.join(", ") + "]";
     }
-    return "[" + this.expr(prefixProp) + ', "/"]';
+    return "[" + this.expr(p) + ', "/"]';
   }
 
-  compileMentionPrefix(prefixProp) {
-    if (prefixProp && prefixProp.type === "prefix_config" && prefixProp.mention) return "true";
-    return "false";
+  compileMentionPrefix(p) {
+    return (p && p.type === "prefix_config" && p.mention) ? "true" : "false";
   }
 
+  // ── Expressions ──────────────────────────────────────────────────────────────
   expr(node) {
     if (!node) return "null";
     switch (node.type) {
@@ -56,25 +56,23 @@ class Compiler {
       case "boolean":     return node.value ? "true" : "false";
       case "null":        return "null";
       case "array":       return "[" + node.value.map(v => this.expr(v)).join(", ") + "]";
-      case "identifier":  return this.resolveIdentifier(node.name);
+      case "identifier":  return this.resolveId(node.name);
       case "member":      return this.expr(node.object) + "." + node.property;
       case "index":       return this.expr(node.object) + "[" + this.expr(node.index) + "]";
       case "binary":      return this.compileBinary(node);
       case "unary":       return this.compileUnary(node);
       case "call":        return this.compileCall(node);
-      case "method_call": return this.expr(node.object) + "." + node.method + "(" + node.args.map(a => this.expr(a)).join(", ") + ")";
+      case "method_call": return this.compileMethodCall(node);
       default:            return "null";
     }
   }
 
   compileString(raw) {
-    const converted = raw.replace(/\{([^}]+)\}/g, (_, v) => {
-      return "${" + this.resolveIdentifier(v.trim()) + "}";
-    });
+    const converted = raw.replace(/\{([^}]+)\}/g, (_, v) => "${" + this.resolveId(v.trim()) + "}");
     return "`" + converted + "`";
   }
 
-  resolveIdentifier(name) {
+  resolveId(name) {
     const map = {
       "member":             "__ctx.member",
       "member.name":        "(__ctx.member?.displayName ?? __ctx.member?.user?.username)",
@@ -97,25 +95,49 @@ class Compiler {
       "reaction.emoji":     "__ctx.reaction?.emoji?.name",
     };
     if (name.startsWith("args.")) {
-      const arg = name.slice(5);
-      return /^\d+$/.test(arg) ? "__args[" + arg + "]" : "__args." + arg;
+      const k = name.slice(5);
+      return /^\d+$/.test(k) ? "__args[" + k + "]" : "__args." + k;
     }
     return map[name] ?? name;
   }
 
   compileBinary(node) {
-    const left  = this.expr(node.left);
-    const right = this.expr(node.right);
-    if (node.op === "contains") return "String(" + left + ").toLowerCase().includes(String(" + right + ").toLowerCase())";
-    if (node.op === "and")      return "(" + left + " && " + right + ")";
-    if (node.op === "or")       return "(" + left + " || " + right + ")";
+    const l = this.expr(node.left), r = this.expr(node.right);
+    if (node.op === "contains") return "String(" + l + ").toLowerCase().includes(String(" + r + ").toLowerCase())";
+    if (node.op === "and") return "(" + l + " && " + r + ")";
+    if (node.op === "or")  return "(" + l + " || " + r + ")";
     const opMap = { "==": "===", "!=": "!==" };
-    return "(" + left + " " + (opMap[node.op] ?? node.op) + " " + right + ")";
+    return "(" + l + " " + (opMap[node.op] ?? node.op) + " " + r + ")";
   }
 
   compileUnary(node) {
     if (node.op === "not") return "!(" + this.expr(node.expr) + ")";
     return node.op + "(" + this.expr(node.expr) + ")";
+  }
+
+  compileMethodCall(node) {
+    const obj = this.expr(node.object);
+    const args = node.args.map(a => this.expr(a)).join(", ");
+    // string utilities
+    const strMethods = {
+      upper:    obj + ".toUpperCase()",
+      lower:    obj + ".toLowerCase()",
+      length:   obj + ".length",
+      trim:     obj + ".trim()",
+      reverse:  obj + ".split('').reverse().join('')",
+      includes: obj + ".toLowerCase().includes(String(" + (node.args[0] ? this.expr(node.args[0]) : '""') + ").toLowerCase())",
+      startsWith: obj + ".startsWith(" + args + ")",
+      endsWith:   obj + ".endsWith(" + args + ")",
+      replace:    obj + ".replaceAll(" + args + ")",
+      split:      obj + ".split(" + args + ")",
+      slice:      obj + ".slice(" + args + ")",
+      indexOf:    obj + ".indexOf(" + args + ")",
+      repeat:     obj + ".repeat(" + args + ")",
+      padStart:   obj + ".padStart(" + args + ")",
+      padEnd:     obj + ".padEnd(" + args + ")",
+    };
+    if (strMethods[node.method]) return strMethods[node.method];
+    return obj + "." + node.method + "(" + args + ")";
   }
 
   compileCall(node) {
@@ -130,19 +152,29 @@ class Compiler {
       "Math.max":        () => "Math.max("   + a.map(x => this.expr(x)).join(", ") + ")",
       "Math.pow":        () => "Math.pow("   + this.expr(a[0]) + ", " + this.expr(a[1]) + ")",
       "Math.sqrt":       () => "Math.sqrt("  + this.expr(a[0]) + ")",
+      "Math.clamp":      () => "Math.min(Math.max(" + this.expr(a[0]) + ", " + this.expr(a[1]) + "), " + this.expr(a[2]) + ")",
       "Time.now":        () => "Date.now()",
       "Time.today":      () => "new Date().toISOString().slice(0,10)",
+      "Time.format":     () => "new Date(" + this.expr(a[0]) + ").toLocaleString()",
+      "Number.parse":    () => "parseFloat(" + this.expr(a[0]) + ")",
+      "Number.isValid":  () => "!isNaN(parseFloat(" + this.expr(a[0]) + "))",
+      "fetch.user":      () => "await __ctx.guild?.members.fetch(" + this.expr(a[0]) + ").catch(()=>null)",
+      "fetch.channel":   () => "await __ctx.guild?.channels.fetch(" + this.expr(a[0]) + ").catch(()=>null)",
+      "member.hasRole":  () => "!!__ctx.member?.roles?.cache?.some(r => r.name === " + this.expr(a[0]) + ")",
       "Storage.get":     () => "await __storage.get("     + a.map(x => this.expr(x)).join(", ") + ")",
       "Storage.set":     () => "await __storage.set("     + a.map(x => this.expr(x)).join(", ") + ")",
       "Storage.getUser": () => "await __storage.getUser(" + a.map(x => this.expr(x)).join(", ") + ")",
       "Storage.setUser": () => "await __storage.setUser(" + a.map(x => this.expr(x)).join(", ") + ")",
       "Storage.delete":  () => "await __storage.delete("  + a.map(x => this.expr(x)).join(", ") + ")",
       "Storage.has":     () => "await __storage.has("     + a.map(x => this.expr(x)).join(", ") + ")",
+      "Storage.deleteUser": () => "await __storage.deleteUser(" + a.map(x => this.expr(x)).join(", ") + ")",
+      "Storage.leaderboard": () => "await __storage.leaderboard(" + a.map(x => this.expr(x)).join(", ") + ")",
     };
     if (builtins[node.name]) return builtins[node.name]();
     return node.name + "(" + a.map(x => this.expr(x)).join(", ") + ")";
   }
 
+  // ── Statements ───────────────────────────────────────────────────────────────
   stmt(node, lines) {
     switch (node.type) {
       case "Reply":
@@ -156,6 +188,9 @@ class Compiler {
         break;
       case "Dm":
         lines.push(this.i("{ try { const __dmU = await client.users.fetch(String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + ")); await __dmU?.send(" + this.expr(node.message) + "); } catch(e){} }"));
+        break;
+      case "Edit":
+        lines.push(this.i("if (__lastMsg) await __lastMsg.edit(" + this.expr(node.value) + ").catch(()=>{});"));
         break;
       case "EmbedSend":
         this.compileEmbed(node, lines);
@@ -178,26 +213,52 @@ class Compiler {
       case "DeleteMessage":
         lines.push(this.i("await __ctx.message?.delete().catch(()=>{});"));
         break;
+      case "AddReaction":
+        lines.push(this.i("await __ctx.message?.react(" + this.expr(node.emoji) + ").catch(()=>{});"));
+        break;
       case "Wait":
         lines.push(this.i("await new Promise(r => setTimeout(r, " + this.durationToMs(node.duration?.value) + "));"));
         break;
       case "Log":
         lines.push(this.i("console.log('[NizumoScript]', " + this.expr(node.value) + ");"));
         break;
-      case "AddReaction":
-        lines.push(this.i("await __ctx.message?.react(" + this.expr(node.emoji) + ").catch(()=>{});"));
+      case "Warn":
+        this.compileWarn(node, lines);
         break;
-      case "If":           this.compileIf(node, lines);      break;
-      case "While":        this.compileWhile(node, lines);   break;
-      case "ForEach":      this.compileForEach(node, lines); break;
-      case "Repeat":       this.compileRepeat(node, lines);  break;
-      case "Break":        lines.push(this.i("break;"));     break;
+      case "Warnings":
+        this.compileWarnings(node, lines);
+        break;
+      case "ClearWarnings":
+        lines.push(this.i("await __storage.deleteUser(String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + "), 'warnings');"));
+        lines.push(this.i("if (__ctx.reply) await __ctx.reply('✅ Warnings cleared.');"));
+        break;
+      case "Confirm":
+        this.compileConfirm(node, lines);
+        break;
+      case "Paginate":
+        this.compilePaginate(node, lines);
+        break;
+      case "CreateChannel":
+        lines.push(this.i("await __ctx.guild?.channels?.create({ name: " + this.expr(node.name) + (node.category ? ", parent: __ctx.guild?.channels?.cache?.find(c => c.name === " + this.expr(node.category) + ")" : "") + " }).catch(()=>{});"));
+        break;
+      case "DeleteChannel":
+        lines.push(this.i("{ const __dch = __ctx.guild?.channels?.cache?.find(c => c.name === " + this.expr(node.name) + "); if (__dch) await __dch.delete().catch(()=>{}); }"));
+        break;
+      case "CreateThread":
+        lines.push(this.i("if (__ctx.message) await __ctx.message.startThread({ name: " + this.expr(node.name) + " }).catch(()=>{});"));
+        break;
+      case "If":           this.compileIf(node, lines);       break;
+      case "While":        this.compileWhile(node, lines);    break;
+      case "ForEach":      this.compileForEach(node, lines);  break;
+      case "Repeat":       this.compileRepeat(node, lines);   break;
+      case "TryCatch":     this.compileTryCatch(node, lines); break;
+      case "Break":        lines.push(this.i("break;"));      break;
       case "Return":       lines.push(this.i("return " + this.expr(node.value) + ";")); break;
       case "VarDecl":      lines.push(this.i("let " + node.name + " = " + this.expr(node.value) + ";")); break;
-      case "VarSet":       this.compileSet(node, lines);     break;
-      case "FuncDecl":     this.compileFunc(node, lines);    break;
+      case "VarSet":       this.compileSet(node, lines);      break;
+      case "FuncDecl":     this.compileFunc(node, lines);     break;
       case "ExprStatement":lines.push(this.i(this.expr(node.expr) + ";")); break;
-      case "Button": case "Select": case "ReactionHandler":  break;
+      case "Button": case "Select": case "ReactionHandler": break;
       default: lines.push(this.i("// unknown: " + node.type));
     }
   }
@@ -216,6 +277,85 @@ class Compiler {
       lines.push(this.i("__embed.addFields({ name: " + this.expr(f.name) + ", value: String(" + this.expr(f.value) + ") });"));
     }
     lines.push(this.i("if (__ctx.reply) await __ctx.reply({ embeds: [__embed] }); else if (__ctx.channel) await __ctx.channel.send({ embeds: [__embed] });"));
+    this.indent--;
+    lines.push(this.i("}"));
+  }
+
+  compileWarn(node, lines) {
+    lines.push(this.i("{"));
+    this.indent++;
+    lines.push(this.i("const __warnId = String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + ");"));
+    lines.push(this.i("const __warns = await __storage.getUser(__warnId, 'warnings', []);"));
+    lines.push(this.i("__warns.push({ reason: " + this.expr(node.reason) + ", date: new Date().toISOString() });"));
+    lines.push(this.i("await __storage.setUser(__warnId, 'warnings', __warns);"));
+    lines.push(this.i("if (__ctx.reply) await __ctx.reply('⚠️ Warning #' + __warns.length + ' issued: ' + " + this.expr(node.reason) + ");"));
+    this.indent--;
+    lines.push(this.i("}"));
+  }
+
+  compileWarnings(node, lines) {
+    lines.push(this.i("{"));
+    this.indent++;
+    lines.push(this.i("const __wId = String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + ");"));
+    lines.push(this.i("const __wList = await __storage.getUser(__wId, 'warnings', []);"));
+    lines.push(this.i("const __embed = new EmbedBuilder().setTitle('⚠️ Warnings').setColor('#FFA500');"));
+    lines.push(this.i("if (!__wList.length) { __embed.setDescription('No warnings.'); }"));
+    lines.push(this.i("else { __wList.forEach((w, i) => __embed.addFields({ name: '#' + (i+1), value: w.reason + ' (' + w.date.slice(0,10) + ')' })); }"));
+    lines.push(this.i("if (__ctx.reply) await __ctx.reply({ embeds: [__embed] });"));
+    this.indent--;
+    lines.push(this.i("}"));
+  }
+
+  compileConfirm(node, lines) {
+    lines.push(this.i("{"));
+    this.indent++;
+    lines.push(this.i("const __confirmMsg = await __ctx.reply({ content: " + this.expr(node.message) + " + ' (yes/no)', fetchReply: true }).catch(()=>null);"));
+    lines.push(this.i("const __confirmFilter = m => m.author.id === __ctx.member?.id && ['yes','no','y','n'].includes(m.content.toLowerCase());"));
+    lines.push(this.i("const __confirmCol = await __ctx.channel?.awaitMessages({ filter: __confirmFilter, max: 1, time: 15000 }).catch(()=>null);"));
+    lines.push(this.i("const __confirmAns = __confirmCol?.first()?.content?.toLowerCase();"));
+    lines.push(this.i("if (__confirmAns === 'yes' || __confirmAns === 'y') {"));
+    this.indent++;
+    node.yesBody.forEach(s => this.stmt(s, lines));
+    this.indent--;
+    lines.push(this.i("}"));
+    if (node.noBody) {
+      lines.push(this.i("else {"));
+      this.indent++;
+      node.noBody.forEach(s => this.stmt(s, lines));
+      this.indent--;
+      lines.push(this.i("}"));
+    }
+    this.indent--;
+    lines.push(this.i("}"));
+  }
+
+  compilePaginate(node, lines) {
+    lines.push(this.i("{"));
+    this.indent++;
+    lines.push(this.i("const __pages = [];"));
+    for (const page of node.pages) {
+      lines.push(this.i("__pages.push(async (__ctx, __args) => {"));
+      this.indent++;
+      page.body.forEach(s => this.stmt(s, lines));
+      this.indent--;
+      lines.push(this.i("});"));
+    }
+    lines.push(this.i("let __pageIdx = 0;"));
+    lines.push(this.i("const __pgRow = new ActionRowBuilder().addComponents("));
+    lines.push(this.i("  new ButtonBuilder().setCustomId('pg_prev').setLabel('◀').setStyle(ButtonStyle.Secondary),"));
+    lines.push(this.i("  new ButtonBuilder().setCustomId('pg_next').setLabel('▶').setStyle(ButtonStyle.Secondary)"));
+    lines.push(this.i(");"));
+    lines.push(this.i("const __pgMsg = await __ctx.reply({ content: 'Page 1/' + __pages.length, components: [__pgRow], fetchReply: true }).catch(()=>null);"));
+    lines.push(this.i("await __pages[0]?.(__ctx, __args);"));
+    lines.push(this.i("const __pgCollector = __pgMsg?.createMessageComponentCollector({ time: 60000 });"));
+    lines.push(this.i("if (__pgCollector) { __pgCollector.on('collect', async i => {"));
+    this.indent++;
+    lines.push(this.i("if (i.customId === 'pg_next' && __pageIdx < __pages.length - 1) __pageIdx++;"));
+    lines.push(this.i("else if (i.customId === 'pg_prev' && __pageIdx > 0) __pageIdx--;"));
+    lines.push(this.i("await i.update({ content: 'Page ' + (__pageIdx+1) + '/' + __pages.length, components: [__pgRow] });"));
+    lines.push(this.i("await __pages[__pageIdx]?.(__ctx, __args);"));
+    this.indent--;
+    lines.push(this.i("}); }"));
     this.indent--;
     lines.push(this.i("}"));
   }
@@ -277,6 +417,18 @@ class Compiler {
     lines.push(this.i("}"));
   }
 
+  compileTryCatch(node, lines) {
+    lines.push(this.i("try {"));
+    this.indent++;
+    node.tryBody.forEach(s => this.stmt(s, lines));
+    this.indent--;
+    lines.push(this.i("} catch(" + node.errVar + ") {"));
+    this.indent++;
+    node.catchBody.forEach(s => this.stmt(s, lines));
+    this.indent--;
+    lines.push(this.i("}"));
+  }
+
   compileSet(node, lines) {
     lines.push(this.i(this.expr(node.name) + " " + node.op + " " + this.expr(node.value) + ";"));
   }
@@ -299,7 +451,7 @@ class Compiler {
     if (!access) return "";
     const val = access.value ?? access;
     if (val === "everyone") return "";
-    const permMap = { moderator: "ModerateMembers", admin: "Administrator", owner: "Administrator", manage: "ManageGuild", ban: "BanMembers", kick: "KickMembers" };
+    const permMap = { moderator:"ModerateMembers", admin:"Administrator", owner:"Administrator", manage:"ManageGuild", ban:"BanMembers", kick:"KickMembers" };
     const perm = permMap[String(val).toLowerCase()] ?? "Administrator";
     return "if (!__ctx.member?.permissions?.has(\"" + perm + "\")) { if (__ctx.reply) await __ctx.reply(\"❌ You don't have permission.\"); return; }";
   }
@@ -325,11 +477,29 @@ class Compiler {
     ].join("\n");
   }
 
+  buildArgValidation(typedArgs) {
+    if (!typedArgs || !typedArgs.length) return "";
+    const lines = [];
+    typedArgs.forEach((arg, i) => {
+      lines.push("    __args." + arg.name + " = __args[" + i + "];");
+      if (arg.type === "Number") {
+        lines.push("    if (isNaN(parseFloat(__args." + arg.name + "))) { if (__ctx.reply) await __ctx.reply('❌ `" + arg.name + "` must be a number.'); return; }");
+        lines.push("    __args." + arg.name + " = parseFloat(__args." + arg.name + ");");
+      } else if (arg.type === "Member") {
+        lines.push("    { const __mid = String(__args." + arg.name + " || '').replace(/[<@!>]/g, ''); const __m = await __ctx.guild?.members.fetch(__mid).catch(()=>null); if (!__m) { if (__ctx.reply) await __ctx.reply('❌ Could not find member for `" + arg.name + "`.'); return; } __args." + arg.name + " = __m; __ctx.member = __m; }");
+      } else if (arg.type === "String") {
+        lines.push("    if (!__args." + arg.name + ") { if (__ctx.reply) await __ctx.reply('❌ `" + arg.name + "` is required.'); return; }");
+      }
+    });
+    return lines.join("\n");
+  }
+
   compileBot(node) {
     const props    = node.props;
     const prefixes = this.compilePrefixes(props.prefix);
     const mention  = this.compileMentionPrefix(props.prefix);
     const status   = props.status ? this.expr(props.status) : null;
+
     const lines = [
       'const { Client, GatewayIntentBits, Collection, EmbedBuilder,',
       '        ActionRowBuilder, ButtonBuilder, ButtonStyle,',
@@ -348,6 +518,7 @@ class Compiler {
       'client.__aliases       = new Map();',
       'client.__cmdPrefixes   = new Map();',
       'client.__slashDefs     = [];',
+      'client.__helpData      = [];',
       'const __storage        = new __NzStorage();',
       'const PREFIXES         = ' + prefixes + ';',
       'const MENTION_PREFIX   = ' + mention + ';',
@@ -356,6 +527,20 @@ class Compiler {
       '  console.log(`[NizumoScript] \u2705 ${client.user.tag} is online!`);',
     ];
     if (status) lines.push('  client.user.setActivity(' + status + ');');
+    if (props.helpAuto) {
+      lines.push('  // Auto-generated help command');
+      lines.push('  client.__commands.set("help", {');
+      lines.push('    name: "help", description: "List all commands", aliases: [], buttons: [], selects: [],');
+      lines.push('    async execute(__ctx, __args) {');
+      lines.push('      const __helpEmbed = new EmbedBuilder().setTitle("\u2699\ufe0f Available Commands").setColor("#5865F2");');
+      lines.push('      for (const [, cmd] of client.__commands) {');
+      lines.push('        if (cmd.name === "help") continue;');
+      lines.push('        __helpEmbed.addFields({ name: PREFIXES[0] + cmd.name, value: cmd.description || "No description" });');
+      lines.push('      }');
+      lines.push('      if (__ctx.reply) await __ctx.reply({ embeds: [__helpEmbed] });');
+      lines.push('    }');
+      lines.push('  });');
+    }
     lines.push(
       '  if (client.__slashDefs.length > 0) {',
       '    try {',
@@ -371,11 +556,12 @@ class Compiler {
 
   compileCommand(node) {
     const { name, props, body } = node;
-    const accessCode   = this.accessCheck(props.access);
-    const cooldownCode = this.cooldownCode(name, props.cooldown);
-    const aliases      = props.aliases ? props.aliases.value.map(a => this.expr(a)).join(", ") : "";
-    const errorMsg     = props.error ? this.expr(props.error) : '"❌ Something went wrong."';
-    const isSlash      = props.slash === true;
+    const accessCode    = this.accessCheck(props.access);
+    const cooldownCode  = this.cooldownCode(name, props.cooldown);
+    const aliases       = props.aliases ? props.aliases.value.map(a => this.expr(a)).join(", ") : "";
+    const errorMsg      = props.error ? this.expr(props.error) : '"❌ Something went wrong."';
+    const isSlash       = props.slash === true;
+    const argValidation = this.buildArgValidation(props.args);
 
     const mainBody  = body.filter(n => !["Button","Select","ReactionHandler"].includes(n.type));
     const buttons   = body.filter(n => n.type === "Button");
@@ -386,7 +572,6 @@ class Compiler {
     const bodyCode = this.stmts(mainBody);
     this.indent = 0;
 
-    // buttons
     const btnDefs = buttons.map((btn, i) => {
       const btnId = name + "_btn_" + i;
       this.indent = 4;
@@ -395,7 +580,6 @@ class Compiler {
       return "{ id: \"" + btnId + "\", label: " + this.expr(btn.label) + ", style: ButtonStyle." + this.capitalise(btn.style) + ", async run(__ctx, __args) {\n" + btnBody + "\n    }}";
     });
 
-    // selects
     const selDefs = selects.map((sel, si) => {
       const selId = name + "_sel_" + si;
       const optDefs = sel.options.map(opt => {
@@ -407,10 +591,8 @@ class Compiler {
       return "{ id: \"" + selId + "\", placeholder: " + this.expr(sel.placeholder) + ", options: [\n" + optDefs.join(",\n") + "\n    ]}";
     });
 
-    // per-command prefix
     const prefixReg = props.prefix ? "client.__cmdPrefixes.set(\"" + name + "\", " + this.compilePrefixes(props.prefix) + ");" : "";
 
-    // slash
     let slashReg = "";
     if (isSlash) {
       const desc = props.description ? this.expr(props.description).replace(/^[`'"]|[`'"]$/g, "") : "A /" + name + " command";
@@ -421,7 +603,7 @@ class Compiler {
         "client.__slashDefs.push(new SlashCommandBuilder().setName(\"" + name + "\").setDescription(\"" + desc + "\").toJSON());",
         "client.__slashCommands.set(\"" + name + "\", async (interaction) => {",
         "  const __ctx = { member: interaction.member, guild: interaction.guild, channel: interaction.channel, reply: (m) => interaction.reply(m), interaction };",
-        "  const __args = {};",
+        "  const __args = {}; let __lastMsg = null;",
         "  try {",
         "    " + accessCode,
         "    " + cooldownCode,
@@ -431,7 +613,6 @@ class Compiler {
       ].join("\n");
     }
 
-    // reactions
     const reactionCode = reactions.map(r => {
       this.indent = 2;
       const rb = this.stmts(r.body);
@@ -441,7 +622,7 @@ class Compiler {
         "  if (user.bot) return;",
         "  if (String(reaction.emoji.name) !== String(" + this.expr(r.emoji) + ")) return;",
         "  const __ctx = { member: await reaction.message.guild?.members.fetch(user.id).catch(()=>null), guild: reaction.message.guild, reaction, reply: (m) => reaction.message.channel.send(m) };",
-        "  const __args = {};",
+        "  const __args = {}; let __lastMsg = null;",
         rb,
         "});",
       ].join("\n");
@@ -455,8 +636,10 @@ class Compiler {
       "  buttons: [" + btnDefs.join(",\n") + "],",
       "  selects: [" + selDefs.join(",\n") + "],",
       "  async execute(__ctx, __args) {",
+      "    let __lastMsg = null;",
       "    " + accessCode,
       "    " + cooldownCode,
+      argValidation,
       bodyCode,
       "  }",
       "});",
@@ -470,28 +653,26 @@ class Compiler {
 
   compileEvent(node) {
     const eventMap = {
-      ready: "ready", message: "messageCreate",
-      memberjoin: "guildMemberAdd", memberleave: "guildMemberRemove",
-      guildcreate: "guildCreate",
-      reactionadd: "messageReactionAdd", reactionremove: "messageReactionRemove",
-      messagedelete: "messageDelete",
+      ready:"ready", message:"messageCreate",
+      memberjoin:"guildMemberAdd", memberleave:"guildMemberRemove",
+      guildcreate:"guildCreate",
+      reactionadd:"messageReactionAdd", reactionremove:"messageReactionRemove",
+      messagedelete:"messageDelete",
     };
     const discordEvent = eventMap[node.eventName.toLowerCase()] ?? node.eventName;
     this.indent = 2;
     const bodyCode = this.stmts(node.body);
     this.indent = 0;
-
-    let params = "...data", ctxSetup = "const __ctx = {}; const __args = {};";
+    let params = "...data", ctxSetup = "const __ctx = {}; const __args = {}; let __lastMsg = null;";
     if (discordEvent === "guildMemberAdd" || discordEvent === "guildMemberRemove") {
-      params = "member"; ctxSetup = "const __ctx = { member, guild: member.guild }; const __args = {};";
+      params = "member"; ctxSetup = "const __ctx = { member, guild: member.guild }; const __args = {}; let __lastMsg = null;";
     } else if (discordEvent === "messageReactionAdd" || discordEvent === "messageReactionRemove") {
-      params = "reaction, user"; ctxSetup = "const __ctx = { reaction, member: user, guild: reaction.message.guild }; const __args = {};";
+      params = "reaction, user"; ctxSetup = "const __ctx = { reaction, member: user, guild: reaction.message.guild }; const __args = {}; let __lastMsg = null;";
     } else if (discordEvent === "messageDelete") {
-      params = "message"; ctxSetup = "const __ctx = { message, guild: message.guild }; const __args = {};";
+      params = "message"; ctxSetup = "const __ctx = { message, guild: message.guild }; const __args = {}; let __lastMsg = null;";
     } else if (discordEvent === "ready") {
-      params = ""; ctxSetup = "const __ctx = {}; const __args = {};";
+      params = ""; ctxSetup = "const __ctx = {}; const __args = {}; let __lastMsg = null;";
     }
-
     return [
       "client.on(\"" + discordEvent + "\", async (" + params + ") => {",
       "  " + ctxSetup,
@@ -509,7 +690,7 @@ class Compiler {
     this.indent = 0;
     return [
       "setInterval(async () => {",
-      "  const __ctx = {}; const __args = {};",
+      "  const __ctx = {}; const __args = {}; let __lastMsg = null;",
       "  try {",
       bodyCode,
       "    console.log('[NizumoScript] \u2705 Task \\'" + node.name + "\\' ran.');",
@@ -523,7 +704,7 @@ class Compiler {
       "// Interaction handler",
       "client.on(\"interactionCreate\", async (interaction) => {",
       "  const __ctx = { member: interaction.member, guild: interaction.guild, channel: interaction.channel, reply: (m) => interaction.reply(m), interaction };",
-      "  const __args = {};",
+      "  const __args = {}; let __lastMsg = null;",
       "  if (interaction.isChatInputCommand()) {",
       "    const sc = client.__slashCommands.get(interaction.commandName);",
       "    if (sc) { try { await sc(interaction); } catch(e) { console.error('[NizumoScript Slash]', e); } }",
@@ -554,7 +735,7 @@ class Compiler {
       "client.on(\"messageCreate\", async (message) => {",
       "  if (message.author.bot) return;",
       "  const __ctx = { member: message.member, guild: message.guild, message, channel: message.channel, reply: (m) => message.reply(m) };",
-      "  const __args = {};",
+      "  const __args = {}; let __lastMsg = null;",
       extraBody ? extraBody : "",
       "  let msgContent = message.content;",
       "  if (MENTION_PREFIX) {",
@@ -594,7 +775,7 @@ class Compiler {
     const nodes   = this.ast.body;
     const botNode = nodes.find(n => n.type === "BotDef");
 
-    this.output.push(this.compileBot(botNode ?? { type: "BotDef", name: "NizumoBot", props: {} }));
+    this.output.push(this.compileBot(botNode ?? { type:"BotDef", name:"NizumoBot", props:{} }));
 
     for (const node of nodes) {
       if (node.type === "FuncDecl") {
