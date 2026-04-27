@@ -3,6 +3,7 @@
 const readline = require("readline");
 const { Lexer }    = require("../lexer/index.js");
 const { Parser }   = require("../parser/index.js");
+const { TokenType } = require("../lexer/index.js");
 const { Compiler } = require("../compiler/index.js");
 const fs   = require("fs");
 const path = require("path");
@@ -464,6 +465,9 @@ async function sim(filePath) {
   // ── REPL ────────────────────────────────────────────────────────────────────
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
+  // Persistent vars across sim session
+  const simVars = {};
+
   const prompt = () => {
     rl.question(color("  > ", c.green, c.bold), async (input) => {
       input = input.trim();
@@ -488,7 +492,8 @@ async function sim(filePath) {
           console.log(color("  .reset           ", c.cyan) + "Reset all storage data");
           console.log(color("  .cooldowns       ", c.cyan) + "Clear all cooldowns");
           console.log(color("  .commands        ", c.cyan) + "List all available commands");
-          console.log(color("  .exit            ", c.cyan) + "Exit the simulator");
+          console.log(color("  .vars            ", c.cyan) + "View current variables");
+  console.log(color("  .exit            ", c.cyan) + "Exit the simulator");
           console.log("");
           prompt(); return;
         }
@@ -529,6 +534,14 @@ async function sim(filePath) {
         if (cmd === "cooldowns") {
           cooldowns.clear();
           console.log(color("  ✅ All cooldowns cleared!", c.green));
+          prompt(); return;
+        }
+
+        if (cmd === "vars") {
+          console.log(color("\n  📦 Variables:", c.bold));
+          if (!Object.keys(simVars).length) console.log(color("  (none)", c.gray));
+          else Object.entries(simVars).forEach(([k,v]) => console.log(color("  " + k + " = ", c.cyan) + JSON.stringify(v)));
+          console.log("");
           prompt(); return;
         }
 
@@ -588,13 +601,14 @@ async function sim(filePath) {
           message: input,
           channel: currentChannel,
           args,
-          vars:    {},
+          vars:    simVars,
           storage,
           output:  [],
         };
 
         try {
           await execStmts(cmdNode.body, ctx);
+          Object.assign(simVars, ctx.vars);
           if (ctx.output.length === 0) {
             console.log(color("  🤖 Bot: ", c.cyan, c.bold) + color("(no output)", c.gray));
           } else {
@@ -608,6 +622,25 @@ async function sim(filePath) {
         prompt(); return;
       }
 
+      // ── Try to execute as raw NizumoScript statement ─────────────────────
+      try {
+        const rawTokens = new Lexer(input).tokenize();
+        const firstType = rawTokens[0]?.type;
+        const stmtTypes = ["VAR","SET","LOG","REPLY","SEND","IF","WHILE","FOR","REPEAT","TRY","FUNC"];
+        if (stmtTypes.includes(firstType)) {
+          const rawParser = new Parser(rawTokens);
+          const stmt = rawParser.parseStatement();
+          const ctx = { member: currentUser, guild, message: input, channel: currentChannel, args: {}, vars: simVars, storage, output: [] };
+          await execStmt(stmt, ctx);
+          // persist vars
+          Object.assign(simVars, ctx.vars);
+          if (ctx.output.length > 0) renderOutput(ctx.output);
+          else console.log(color("  ✅ Done", c.gray));
+          console.log("");
+          prompt(); return;
+        }
+      } catch(e) { /* not a raw statement, treat as message */ }
+
       // ── Plain message — fire on message event ──────────────────────────────
       if (events["message"]) {
         const ctx = {
@@ -616,16 +649,19 @@ async function sim(filePath) {
           message: input,
           channel: currentChannel,
           args:    {},
-          vars:    {},
+          vars:    simVars,
           storage,
           output:  [],
         };
         try {
           await execStmts(events["message"].body, ctx);
+          Object.assign(simVars, ctx.vars);
           if (ctx.output.length > 0) renderOutput(ctx.output);
         } catch(err) {
           console.log(color("  ❌ Runtime error: " + err.message, c.red));
         }
+      } else {
+        console.log(color("  💬 (no on message handler)", c.gray));
       }
 
       console.log("");
