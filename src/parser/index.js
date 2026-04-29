@@ -88,7 +88,15 @@ class Parser {
     while (true) {
       if (this.check(TokenType.DOT)) {
         this.advance();
-        const prop = this.expect(TokenType.IDENTIFIER, "Expected property name after '.'").value;
+        // allow keywords and numbers as property names (e.g. args.0, Number.format)
+        let prop;
+        if (this.check(TokenType.IDENTIFIER) || this.check(TokenType.NUMBER)) {
+          prop = this.advance().value;
+        } else if (this.current().type !== TokenType.EOF && this.current().type !== TokenType.LBRACE && this.current().type !== TokenType.RBRACE) {
+          prop = this.advance().value;
+        } else {
+          throw new Error("[NizumoScript] Line " + this.current().line + ": Expected property name after '.'");
+        }
         if (this.check(TokenType.LPAREN)) {
           this.advance();
           const args = [];
@@ -173,6 +181,8 @@ class Parser {
     if (tok.type === TokenType.CREATE_CHANNEL) return this.parseCreateChannel();
     if (tok.type === TokenType.DELETE_CHANNEL) return this.parseDeleteChannel();
     if (tok.type === TokenType.CREATE_THREAD)  return this.parseCreateThread();
+    if (tok.type === TokenType.SEND_SYSTEM)     return this.parseSendSystem();
+    if (tok.type === TokenType.SEND_DM_SAFE)    return this.parseSendDmSafe();
     if (tok.type === TokenType.IF)             return this.parseIf();
     if (tok.type === TokenType.WHILE)          return this.parseWhile();
     if (tok.type === TokenType.FOR)            return this.parseFor();
@@ -343,6 +353,18 @@ class Parser {
     this.expect(TokenType.CREATE_THREAD);
     const name = this.parseExpr();
     return { type:"CreateThread", name };
+  }
+
+  parseSendSystem() {
+    this.expect(TokenType.SEND_SYSTEM);
+    return { type: "SendSystem", value: this.parseExpr() };
+  }
+
+  parseSendDmSafe() {
+    this.expect(TokenType.SEND_DM_SAFE);
+    const target  = this.parseExpr();
+    const message = this.parseExpr();
+    return { type: "SendDmSafe", target, message };
   }
 
   parseIf() {
