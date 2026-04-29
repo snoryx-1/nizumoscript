@@ -137,13 +137,35 @@ class Compiler {
       padEnd:     obj + ".padEnd(" + args + ")",
     };
     if (strMethods[node.method]) return strMethods[node.method];
+
+    // Number object methods
+    if (String(node.object?.name) === "Number") {
+      if (node.method === "format" || node.method === "comma") return "Number(" + args + ").toLocaleString()";
+      if (node.method === "parse")   return "parseFloat(" + args + ")";
+      if (node.method === "isValid") return "!isNaN(parseFloat(" + args + "))";
+      if (node.method === "round")   return "Math.round(" + args + ")";
+      if (node.method === "floor")   return "Math.floor(" + args + ")";
+      if (node.method === "ceil")    return "Math.ceil("  + args + ")";
+      if (node.method === "abs")     return "Math.abs("   + args + ")";
+    }
+
+    // Math object methods
+    if (String(node.object?.name) === "Math") {
+      return "Math." + node.method + "(" + args + ")";
+    }
+
+    // String object methods
+    if (String(node.object?.name) === "String") {
+      if (node.method === "clean") return "String(" + args + ").replace(/[<@!&#>]/g, '').trim()";
+    }
+
     return obj + "." + node.method + "(" + args + ")";
   }
 
   compileCall(node) {
     const a = node.args;
     const builtins = {
-      "random":          () => "Math.floor(Math.random() * (" + this.expr(a[1]) + " - " + this.expr(a[0]) + " + 1)) + " + this.expr(a[0]),
+      "random":          () => "(() => { const __mn = Math.min(" + this.expr(a[0]) + ", " + this.expr(a[1]) + "), __mx = Math.max(" + this.expr(a[0]) + ", " + this.expr(a[1]) + "); return Math.floor(Math.random() * (__mx - __mn + 1)) + __mn; })()",
       "Math.round":      () => "Math.round(" + this.expr(a[0]) + ")",
       "Math.floor":      () => "Math.floor(" + this.expr(a[0]) + ")",
       "Math.ceil":       () => "Math.ceil("  + this.expr(a[0]) + ")",
@@ -158,6 +180,8 @@ class Compiler {
       "Time.format":     () => "new Date(" + this.expr(a[0]) + ").toLocaleString()",
       "Number.parse":    () => "parseFloat(" + this.expr(a[0]) + ")",
       "Number.isValid":  () => "!isNaN(parseFloat(" + this.expr(a[0]) + "))",
+      "Number.format":   () => "Number(" + this.expr(a[0]) + ").toLocaleString()",
+      "clean.id":        () => "String(" + this.expr(a[0]) + ").replace(/[<@!&#>]/g, '').trim()",
       "fetch.user":      () => "await __ctx.guild?.members.fetch(" + this.expr(a[0]) + ").catch(()=>null)",
       "fetch.channel":   () => "await __ctx.guild?.channels.fetch(" + this.expr(a[0]) + ").catch(()=>null)",
       "member.hasRole":  () => "!!__ctx.member?.roles?.cache?.some(r => r.name === " + this.expr(a[0]) + ")",
@@ -184,10 +208,10 @@ class Compiler {
         lines.push(this.i("if (__ctx.channel) await __ctx.channel.send(" + this.expr(node.value) + ");"));
         break;
       case "SendChannel":
-        lines.push(this.i("{ const __ch = __ctx.guild?.channels?.cache?.find(c => c.name === " + this.expr(node.channel) + "); if (__ch) await __ch.send(" + this.expr(node.message) + "); }"));
+        lines.push(this.i("{ const __ch = __ctx.guild?.channels?.cache?.find(c => c.name === " + this.expr(node.channel) + " && c.isTextBased()) ?? __ctx.guild?.systemChannel; if (__ch) await __ch.send(" + this.expr(node.message) + ").catch(()=>{}); }"));
         break;
       case "Dm":
-        lines.push(this.i("{ try { const __dmU = await client.users.fetch(String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + ")); await __dmU?.send(" + this.expr(node.message) + "); } catch(e){} }"));
+        lines.push(this.i("{ try { const __dmId = String(" + this.expr(node.target) + "?.id ?? " + this.expr(node.target) + "); const __dmU = await client.users.fetch(__dmId).catch(()=>null); if (__dmU) await __dmU.send(" + this.expr(node.message) + ").catch(() => console.log('[NizumoScript] DM failed - user may have DMs disabled')); } catch(e){ console.log('[NizumoScript] DM error:', e.message); } }"));
         break;
       case "Edit":
         lines.push(this.i("if (__lastMsg) await __lastMsg.edit(" + this.expr(node.value) + ").catch(()=>{});"));
@@ -486,7 +510,7 @@ class Compiler {
         lines.push("    if (isNaN(parseFloat(__args." + arg.name + "))) { if (__ctx.reply) await __ctx.reply('❌ `" + arg.name + "` must be a number.'); return; }");
         lines.push("    __args." + arg.name + " = parseFloat(__args." + arg.name + ");");
       } else if (arg.type === "Member") {
-        lines.push("    { const __mid = String(__args." + arg.name + " || '').replace(/[<@!>]/g, ''); const __m = await __ctx.guild?.members.fetch(__mid).catch(()=>null); if (!__m) { if (__ctx.reply) await __ctx.reply('❌ Could not find member for `" + arg.name + "`.'); return; } __args." + arg.name + " = __m; __ctx.member = __m; }");
+        lines.push("    { const __mid = String(__args." + arg.name + " || '').replace(/[<@!>]/g, '').trim(); const __m = __mid ? await __ctx.guild?.members.fetch(__mid).catch(()=>null) : null; if (!__m) { if (__ctx.reply) await __ctx.reply('❌ Member not found. Mention them or use their ID.'); return; } __args." + arg.name + " = __m; __ctx.member = __m; }");
       } else if (arg.type === "String") {
         lines.push("    if (!__args." + arg.name + ") { if (__ctx.reply) await __ctx.reply('❌ `" + arg.name + "` is required.'); return; }");
       }
@@ -689,13 +713,13 @@ class Compiler {
     const bodyCode = this.stmts(node.body);
     this.indent = 0;
     return [
-      "setInterval(async () => {",
+      "client.once(\"ready\", () => setInterval(async () => {",
       "  const __ctx = {}; const __args = {}; let __lastMsg = null;",
       "  try {",
       bodyCode,
       "    console.log('[NizumoScript] \u2705 Task \\'" + node.name + "\\' ran.');",
       "  } catch(err) { console.error('[NizumoScript Task Error]', err); }",
-      "}, " + ms + ");",
+      "}, " + ms + "));",
     ].join("\n");
   }
 
