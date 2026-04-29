@@ -120,6 +120,26 @@ function evalExpr(node, ctx) {
   }
 }
 
+function evalMethodCall(node, ctx) {
+  const obj = evalExpr(node.object, ctx);
+  const str = String(obj ?? "");
+  switch (node.method) {
+    case "upper":      return str.toUpperCase();
+    case "lower":      return str.toLowerCase();
+    case "trim":       return str.trim();
+    case "length":     return str.length;
+    case "reverse":    return str.split("").reverse().join("");
+    case "includes":   return str.toLowerCase().includes(String(evalExpr(node.args[0], ctx)).toLowerCase());
+    case "startsWith": return str.startsWith(String(evalExpr(node.args[0], ctx)));
+    case "endsWith":   return str.endsWith(String(evalExpr(node.args[0], ctx)));
+    case "replace":    return str.replaceAll(String(evalExpr(node.args[0], ctx)), String(evalExpr(node.args[1], ctx)));
+    case "split":      return str.split(String(evalExpr(node.args[0], ctx)));
+    case "slice":      return str.slice(evalExpr(node.args[0], ctx), node.args[1] ? evalExpr(node.args[1], ctx) : undefined);
+    case "indexOf":    return str.indexOf(String(evalExpr(node.args[0], ctx)));
+    default:           return null;
+  }
+}
+
 function interpolate(str, ctx) {
   return str.replace(/\{([^}]+)\}/g, (_, v) => {
     const val = resolveId(v.trim(), ctx);
@@ -238,9 +258,15 @@ async function execStmt(node, ctx) {
       ctx.output.push({ type: "channel", channel: String(ch), content: String(msg ?? "") });
       break;
     }
-    case "Dm": {
+    case "Dm":
+    case "SendDmSafe": {
       const msg = await evalExpr(node.message, ctx);
       ctx.output.push({ type: "dm", content: String(msg ?? "") });
+      break;
+    }
+    case "SendSystem": {
+      const msg = await evalExpr(node.value, ctx);
+      ctx.output.push({ type: "channel", channel: "system", content: String(msg ?? "") });
       break;
     }
     case "EmbedSend": {
@@ -318,7 +344,12 @@ async function execStmt(node, ctx) {
       if (cond) {
         await execStmts(node.body, ctx);
       } else if (node.elseBody) {
-        await execStmts(node.elseBody, ctx);
+        // handle elif (elseBody is array with single If node)
+        if (node.elseBody.length === 1 && node.elseBody[0].type === "If") {
+          await execStmt(node.elseBody[0], ctx);
+        } else {
+          await execStmts(node.elseBody, ctx);
+        }
       }
       break;
     }
