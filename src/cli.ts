@@ -7,7 +7,7 @@ import { Resolver } from "./resolver";
 import { Transpiler } from "./transpiler";
 import { NZSError } from "./errors";
 
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 
 const HELP = `
 NizumoScript v${VERSION} — Discord bot language compiler

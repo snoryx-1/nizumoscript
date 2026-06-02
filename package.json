@@ -1,6 +1,6 @@
 {
   "name": "nizumoscript",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "NizumoScript — A clean, readable language for building Discord bots",
   "main": "dist/cli.js",
   "bin": {

@@ -7,17 +7,6 @@ A clean, readable language for building Discord bots. Compiles to JavaScript (di
 ```bash
 npm install -g nizumoscript
 ```
-
-Or from source (Termux):
-```bash
-pkg install nodejs git
-git clone https://github.com/snoryx-1/nizumoscript
-cd nizumoscript
-npm install
-npx tsc
-npm link
-```
-
 ## Quick Start
 
 ```bash
@@ -48,7 +37,7 @@ nzs run main.nzs
 ## Language Overview
 
 ```nzs
-#nzs 1.0.0
+#nzs 1.0.1
 
 bot {
   token: env.TOKEN
