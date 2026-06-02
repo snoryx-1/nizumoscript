@@ -1,0 +1,47 @@
+{
+  "name": "nizumoscript",
+  "version": "1.0.0",
+  "description": "NizumoScript — A clean, readable language for building Discord bots",
+  "main": "dist/cli.js",
+  "bin": {
+    "nzs": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/cli.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "language",
+    "compiler",
+    "nizumoscript",
+    "nzs"
+  ],
+  "author": "snoryx-1",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snoryx-1/nizumoscript.git"
+  },
+  "homepage": "https://github.com/snoryx-1/nizumoscript#readme",
+  "bugs": {
+    "url": "https://github.com/snoryx-1/nizumoscript/issues"
+  }
+}
